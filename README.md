@@ -184,6 +184,11 @@ aw commit setup front --tab git --agent codex
 aw commit setup front --session sketch-api --tab git --agent codex
 ```
 
+The setup command prepares the tab and can start the agent, but it does not
+consume queue items by itself. The commit-owner agent in the `git` tab becomes
+active when it receives `$x-commit next`; `aw commit poke git` sends that text
+to the tab.
+
 Worker tabs use only the request/status front door:
 
 ```bash
@@ -195,6 +200,11 @@ aw commit status
 aw commit doctor
 aw commit wait <request-id>
 ```
+
+After `--poke git`, the `git` tab should run `$x-commit next`, inspect the
+ticket, commit the scoped live paths when safe, and mark the ticket done or
+blocked. Worker tabs should not run `$x-commit next`; they submit requests,
+check status, and wait only for their own request when needed.
 
 Use `aw commit wait <request-id>` only for one ticket. There is intentionally
 no global wait command, because that would make a worker wait for unrelated
