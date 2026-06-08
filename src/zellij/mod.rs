@@ -116,7 +116,19 @@ pub fn list_workspace_tabs(workspace: &str, tabs_file: &Path) -> Result<()> {
     Ok(())
 }
 
-fn commit_tab_id(requested_name: &str, session: Option<&str>) -> Result<Option<String>> {
+pub fn rename_live_workspace_tab(session: &str, old_name: &str, new_name: &str) -> Result<()> {
+    validate_name("tab", old_name)?;
+    validate_name("tab", new_name)?;
+    let Some(tab_id) = tab_id_by_base_name(Some(session), old_name)? else {
+        return Ok(());
+    };
+    zellij_action(
+        Some(session),
+        &["action", "rename-tab-by-id", &tab_id, new_name],
+    )
+}
+
+fn tab_id_by_base_name(session: Option<&str>, requested_name: &str) -> Result<Option<String>> {
     validate_name("tab", requested_name)?;
     let mut command = Command::new("zellij");
     if let Some(session) = session {
@@ -145,6 +157,10 @@ fn commit_tab_id(requested_name: &str, session: Option<&str>) -> Result<Option<S
         }
     }
     Ok(None)
+}
+
+fn commit_tab_id(requested_name: &str, session: Option<&str>) -> Result<Option<String>> {
+    tab_id_by_base_name(session, requested_name)
 }
 
 fn commit_tab_pane_id(requested_name: &str, session: Option<&str>) -> Result<Option<String>> {

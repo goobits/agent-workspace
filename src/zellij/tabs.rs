@@ -136,6 +136,24 @@ pub fn remove_workspace_tab_line(tabs_file: &Path, remove_name: &str) -> Result<
 }
 
 pub fn rename_workspace_tab_line(tabs_file: &Path, old_name: &str, new_name: &str) -> Result<()> {
+    let next_lines = renamed_workspace_tab_lines(tabs_file, old_name, new_name)?;
+    fs::write(tabs_file, format!("{}\n", next_lines.join("\n")))?;
+    Ok(())
+}
+
+pub fn validate_workspace_tab_rename(
+    tabs_file: &Path,
+    old_name: &str,
+    new_name: &str,
+) -> Result<()> {
+    renamed_workspace_tab_lines(tabs_file, old_name, new_name).map(|_| ())
+}
+
+fn renamed_workspace_tab_lines(
+    tabs_file: &Path,
+    old_name: &str,
+    new_name: &str,
+) -> Result<Vec<String>> {
     validate_name("tab", old_name)?;
     validate_name("tab", new_name)?;
     let current_lines = read_tab_lines(tabs_file)?;
@@ -167,6 +185,5 @@ pub fn rename_workspace_tab_line(tabs_file: &Path, old_name: &str, new_name: &st
             1,
         ));
     }
-    fs::write(tabs_file, format!("{}\n", next_lines.join("\n")))?;
-    Ok(())
+    Ok(next_lines)
 }

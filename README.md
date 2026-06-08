@@ -326,6 +326,21 @@ default_workspace=main
 default_workspaces=main frontend
 ```
 
+Set `tab_bar=aw` to use the optional AW tab bar plugin when its WASM artifact
+is installed. The stock Zellij tab bar remains the default.
+
+```text
+tab_bar=aw
+```
+
+Build the plugin before `aw install` when you want installer-managed placement:
+
+```bash
+rustup target add wasm32-wasip1
+cargo build --release --manifest-path infra/aw/plugins/aw-tab-bar/Cargo.toml --target wasm32-wasip1
+aw install
+```
+
 `*.tabs` files list tabs in order. Add a tab-specific working directory after a
 tab character:
 

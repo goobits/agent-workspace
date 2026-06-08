@@ -1,0 +1,202 @@
+mod state;
+
+use std::collections::BTreeMap;
+
+use state::{KeyInput, TabBarCommand, TabBarState, TabItem};
+use zellij_tile::prelude::*;
+
+#[derive(Debug)]
+struct Config {
+    workspace: Option<String>,
+    aw_bin: String,
+    double_click_seconds: f64,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            workspace: None,
+            aw_bin: "aw".to_string(),
+            double_click_seconds: 0.35,
+        }
+    }
+}
+
+#[derive(Default)]
+struct PluginState {
+    config: Config,
+    tabs: TabBarState,
+}
+
+register_plugin!(PluginState);
+
+impl ZellijPlugin for PluginState {
+    fn load(&mut self, configuration: BTreeMap<String, String>) {
+        self.config = Config::from(configuration);
+        set_selectable(true);
+        request_permission(&[
+            PermissionType::ReadApplicationState,
+            PermissionType::ChangeApplicationState,
+            PermissionType::RunCommands,
+        ]);
+        subscribe(&[
+            EventType::TabUpdate,
+            EventType::Mouse,
+            EventType::Key,
+            EventType::Timer,
+            EventType::RunCommandResult,
+        ]);
+    }
+
+    fn update(&mut self, event: Event) -> bool {
+        match event {
+            Event::TabUpdate(tabs) => {
+                self.tabs
+                    .replace_tabs(tabs.into_iter().map(TabItem::from).collect());
+                true
+            }
+            Event::Mouse(Mouse::LeftClick(_, col)) => {
+                self.tabs.clear_status();
+                self.tabs.click(col);
+                if self.tabs.rename().is_none() {
+                    set_timeout(self.config.double_click_seconds);
+                }
+                true
+            }
+            Event::Mouse(Mouse::Hold(_, col)) => {
+                self.tabs.hold(col);
+                true
+            }
+            Event::Mouse(Mouse::Release(_, col)) => {
+                if let Some(command) = self.tabs.release(col) {
+                    self.run_tab_command(command);
+                }
+                true
+            }
+            Event::Timer(_) => {
+                if let Some(command) = self.tabs.click_timeout() {
+                    self.run_tab_command(command);
+                    return true;
+                }
+                false
+            }
+            Event::Key(key) => {
+                if let Some(command) = self.tabs.key(KeyInput::from(key)) {
+                    self.run_tab_command(command);
+                }
+                true
+            }
+            Event::RunCommandResult(exit_code, _, stderr, context) => {
+                if context
+                    .get("source")
+                    .is_some_and(|source| source == "aw-tab-bar")
+                {
+                    if exit_code != Some(0) {
+                        let error = String::from_utf8_lossy(&stderr);
+                        self.tabs.set_status(format!("aw failed: {}", error.trim()));
+                    }
+                    return true;
+                }
+                false
+            }
+            _ => false,
+        }
+    }
+
+    fn render(&mut self, _rows: usize, cols: usize) {
+        println!("{}", self.tabs.render_line(cols));
+    }
+}
+
+impl PluginState {
+    fn run_tab_command(&mut self, command: TabBarCommand) {
+        match command {
+            TabBarCommand::Focus { index } => switch_tab_to((index + 1) as u32),
+            TabBarCommand::Move { name, index } => {
+                let Some(workspace) = self.config.workspace.clone() else {
+                    self.tabs.set_status("missing workspace");
+                    return;
+                };
+                self.run_aw(vec![
+                    "tab".to_string(),
+                    "move".to_string(),
+                    workspace,
+                    format!("{}@{}", name, index),
+                ]);
+            }
+            TabBarCommand::Rename { old_name, new_name } => {
+                let Some(workspace) = self.config.workspace.clone() else {
+                    self.tabs.set_status("missing workspace");
+                    return;
+                };
+                self.run_aw(vec![
+                    "tab".to_string(),
+                    "rename".to_string(),
+                    workspace,
+                    old_name,
+                    new_name,
+                ]);
+            }
+        }
+    }
+
+    fn run_aw(&mut self, args: Vec<String>) {
+        let mut command = Vec::with_capacity(args.len() + 1);
+        command.push(self.config.aw_bin.clone());
+        command.extend(args);
+        let command_refs: Vec<&str> = command.iter().map(String::as_str).collect();
+        let mut context = BTreeMap::new();
+        context.insert("source".to_string(), "aw-tab-bar".to_string());
+        run_command(&command_refs, context);
+    }
+}
+
+impl From<BTreeMap<String, String>> for Config {
+    fn from(configuration: BTreeMap<String, String>) -> Self {
+        let mut config = Config::default();
+        if let Some(workspace) = configuration.get("workspace") {
+            if !workspace.is_empty() {
+                config.workspace = Some(workspace.clone());
+            }
+        }
+        if let Some(aw_bin) = configuration.get("aw") {
+            if !aw_bin.is_empty() {
+                config.aw_bin = aw_bin.clone();
+            }
+        }
+        if let Some(raw) = configuration.get("double_click_ms") {
+            if let Ok(ms) = raw.parse::<u64>() {
+                config.double_click_seconds = (ms as f64 / 1000.0).clamp(0.1, 2.0);
+            }
+        }
+        config
+    }
+}
+
+impl From<TabInfo> for TabItem {
+    fn from(tab: TabInfo) -> Self {
+        Self {
+            id: tab.tab_id,
+            position: tab.position,
+            name: tab.name,
+            active: tab.active,
+            has_bell: tab.has_bell_notification || tab.is_flashing_bell,
+            sync_panes: tab.is_sync_panes_active,
+        }
+    }
+}
+
+impl From<KeyWithModifier> for KeyInput {
+    fn from(key: KeyWithModifier) -> Self {
+        if !key.has_no_modifiers() {
+            return KeyInput::Other;
+        }
+        match key.bare_key {
+            BareKey::Char(ch) => KeyInput::Char(ch),
+            BareKey::Backspace => KeyInput::Backspace,
+            BareKey::Enter => KeyInput::Enter,
+            BareKey::Esc => KeyInput::Esc,
+            _ => KeyInput::Other,
+        }
+    }
+}

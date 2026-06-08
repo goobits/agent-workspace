@@ -1,7 +1,10 @@
+use std::env;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::error::{AwError, Result};
+use crate::paths::home_dir;
+use crate::profile::profile_value;
 
 pub fn kdl_escape(value: &str) -> String {
     value.replace('\\', "\\\\").replace('"', "\\\"")
@@ -21,9 +24,7 @@ pub fn render_layout(tabs_file: &Path, workdir: &str) -> Result<String> {
     let mut output = String::new();
     output.push_str("layout {\n");
     output.push_str(&format!("    cwd \"{}\"\n\n", kdl_escape(workdir)));
-    output.push_str(
-        "    default_tab_template {\n        pane size=1 borderless=true {\n            plugin location=\"zellij:tab-bar\"\n        }\n        children\n    }\n\n",
-    );
+    output.push_str(&tab_bar_template(tabs_file));
 
     let mut first = true;
     for line in fs::read_to_string(tabs_file)?.lines() {
@@ -52,4 +53,41 @@ pub fn render_layout(tabs_file: &Path, workdir: &str) -> Result<String> {
     }
     output.push_str("}\n");
     Ok(output)
+}
+
+fn tab_bar_template(tabs_file: &Path) -> String {
+    let profile_file = tabs_file
+        .parent()
+        .unwrap_or_else(|| Path::new(""))
+        .join("profile.conf");
+    let profile_tab_bar = profile_value(&profile_file, "tab_bar", "zellij");
+    if matches!(profile_tab_bar.as_str(), "aw" | "aw-tab-bar") {
+        if let Some(plugin_path) = aw_tab_bar_plugin_path() {
+            let workspace = tabs_file
+                .file_stem()
+                .and_then(|name| name.to_str())
+                .unwrap_or("workspace");
+            return format!(
+                "    default_tab_template {{\n        pane size=1 borderless=true {{\n            plugin location=\"file:{}\" {{\n                workspace \"{}\"\n                aw \"aw\"\n            }}\n        }}\n        children\n    }}\n\n",
+                kdl_escape(&plugin_path.to_string_lossy()),
+                kdl_escape(workspace)
+            );
+        }
+    }
+
+    "    default_tab_template {\n        pane size=1 borderless=true {\n            plugin location=\"zellij:tab-bar\"\n        }\n        children\n    }\n\n".to_string()
+}
+
+fn aw_tab_bar_plugin_path() -> Option<PathBuf> {
+    if let Some(path) = env::var_os("AW_TAB_BAR_PLUGIN_PATH")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+    {
+        if path.is_file() {
+            return Some(path);
+        }
+    }
+
+    let installed = home_dir().join(".local/share/agent-workspace/plugins/aw-tab-bar.wasm");
+    installed.is_file().then_some(installed)
 }

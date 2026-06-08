@@ -367,15 +367,18 @@ fn install_files() -> Result<()> {
     let state_dir = home_dir().join(".local/share/agent-workspace");
     let internal_bin = state_dir.join("bin");
     let completion_dir = state_dir.join("completions");
+    let plugin_dir = state_dir.join("plugins");
     fs::create_dir_all(home_dir().join(".config/aw"))?;
     fs::create_dir_all(&local_bin)?;
     fs::create_dir_all(&internal_bin)?;
+    fs::create_dir_all(&plugin_dir)?;
     fs::create_dir_all(state_dir.join("profiles"))?;
     fs::create_dir_all(&completion_dir)?;
 
     fs::write(home_dir().join(".config/aw/config.kdl"), CONFIG_KDL)?;
     fs::write(completion_dir.join("_aw"), ZSH_COMPLETION)?;
     fs::write(completion_dir.join("aw.bash"), BASH_COMPLETION)?;
+    install_aw_tab_bar_plugin(&plugin_dir)?;
     ensure_codex_status_line()?;
     ensure_claude_status_line(&internal_bin.join("claude-statusline"))?;
 
@@ -403,6 +406,20 @@ fn install_files() -> Result<()> {
     }
     for stale in ["backend.kdl", "frontend.kdl"] {
         let _ = fs::remove_file(home_dir().join(".config/aw/layouts").join(stale));
+    }
+    Ok(())
+}
+
+fn install_aw_tab_bar_plugin(plugin_dir: &Path) -> Result<()> {
+    let source = env::var_os("AW_TAB_BAR_WASM_SOURCE")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("plugins/aw-tab-bar/target/wasm32-wasip1/release/aw-tab-bar.wasm")
+        });
+    if source.is_file() {
+        fs::copy(source, plugin_dir.join("aw-tab-bar.wasm"))?;
     }
     Ok(())
 }

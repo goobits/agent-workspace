@@ -133,6 +133,28 @@ fn install_writes_public_binary_private_helpers_config_and_completions() {
 }
 
 #[test]
+fn install_copies_aw_tab_bar_plugin_when_wasm_source_is_available() {
+    let home = TestHome::new("install-tab-bar-plugin");
+    let plugin = home.root.join("aw-tab-bar.wasm");
+    temp::write(&plugin, "wasm\n");
+
+    let output = home
+        .command(support::command::aw())
+        .env("ZELLIJ_INSTALL_BINARY", "0")
+        .env("ZELLIJ_INSTALL_SHELL_RC", "0")
+        .env("AW_TAB_BAR_WASM_SOURCE", &plugin)
+        .arg("install")
+        .output()
+        .expect("run aw install");
+    assert_success("aw install", &output);
+
+    let installed = home
+        .home
+        .join(".local/share/agent-workspace/plugins/aw-tab-bar.wasm");
+    assert_eq!(fs::read_to_string(installed).unwrap(), "wasm\n");
+}
+
+#[test]
 fn install_preserves_existing_codex_status_line() {
     let home = TestHome::new("install-codex-config");
     temp::write(

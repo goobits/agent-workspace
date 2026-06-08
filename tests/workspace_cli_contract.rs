@@ -162,6 +162,55 @@ fn workspace_assignment_rename_remove_and_validation_are_rust_contracts() {
 }
 
 #[test]
+fn tab_rename_preserves_live_tab_instead_of_recreating_it() {
+    let home = install_test_aw("workspace-tab-rename-live");
+    let project = home.root.join("project");
+    let profile = project.join("config/aw");
+    std::fs::create_dir_all(&profile).unwrap();
+    temp::write(
+        profile.join("profile.conf"),
+        &format!(
+            "name=project\nroot={}\ndefault_workspace=front\ndefault_workspaces=front\n",
+            project.display()
+        ),
+    );
+    temp::write(
+        profile.join("front.tabs"),
+        "tools\ncomponents\nkeyboard\nscratch\n",
+    );
+
+    let tabs = home.root.join("live-tabs");
+    temp::write(
+        &tabs,
+        "0\t0\tfalse\ttools\n1\t1\tfalse\tcomponents\n2\t2\ttrue\tkeyboard\n3\t3\tfalse\tscratch\n",
+    );
+
+    let output = home
+        .aw_command()
+        .args(["tab", "rename", "front", "keyboard", "keys"])
+        .current_dir(&project)
+        .env("FAKE_ZELLIJ_TABS", &tabs)
+        .env(
+            "FAKE_ZELLIJ_ORDER_ARGS",
+            home.root.join("front-rename-order.txt"),
+        )
+        .output()
+        .expect("tab rename");
+    assert_success("tab rename", &output);
+
+    assert_eq!(
+        read(profile.join("front.tabs")),
+        "tools\ncomponents\nkeys\nscratch\n"
+    );
+    assert_eq!(fake_zellij::tab_name(&tabs, "2"), "keys");
+    assert_eq!(
+        fake_zellij::sorted_tab_names(&tabs),
+        vec!["tools", "components", "keys", "scratch"]
+    );
+    assert!(!tabs.with_extension("cwds").exists());
+}
+
+#[test]
 fn doctor_refresh_tab_edit_scratch_and_session_commands_use_aw_surface() {
     let home = install_test_aw("workspace-cli");
     let project = home.root.join("project");

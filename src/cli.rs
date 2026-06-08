@@ -16,12 +16,12 @@ use crate::profile::{
 use crate::repo_tasks;
 use crate::tabs::{
     parse_tabs_args, parse_tabs_csv, remove_workspace_tab_line, rename_workspace_tab_line,
-    upsert_workspace_tab_line, write_tabs_file,
+    upsert_workspace_tab_line, validate_workspace_tab_rename, write_tabs_file,
 };
 use crate::workspace_tasks;
 use crate::zellij::{
     count_tabs_files, ensure_workspace_tabs_file, installed_profile_dir, list_workspace_tabs,
-    run_helper, sync_workspace_session, zellij_passthrough,
+    rename_live_workspace_tab, run_helper, sync_workspace_session, zellij_passthrough,
 };
 
 pub const USAGE: &str = r#"aw: Zero-friction Zellij workspaces
@@ -480,6 +480,8 @@ fn run_workspace_tab_command(workspace: &str, action: &str, args: &[String]) -> 
                     workspace
                 )));
             }
+            validate_workspace_tab_rename(&tabs_file, &args[0], &args[1])?;
+            rename_live_workspace_tab(workspace, &args[0], &args[1])?;
             rename_workspace_tab_line(&tabs_file, &args[0], &args[1])?;
             install_profile(&config_dir, true)?;
             sync_workspace_session(&config_dir, workspace, None)?;

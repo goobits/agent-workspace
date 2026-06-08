@@ -47,3 +47,27 @@ fn render_layout_preserves_tab_order_and_tab_specific_cwd() {
     assert!(stdout(&output)
         .contains("pane cwd=\"/workspace/apps/sketchpad/distributions/electronApp\""));
 }
+
+#[test]
+fn render_layout_uses_aw_tab_bar_when_profile_opts_in_and_plugin_exists() {
+    let tmp = TempDir::new("layout-aw-tab-bar");
+    let tabs = tmp.join("front.tabs");
+    let plugin = tmp.join("aw-tab-bar.wasm");
+    temp::write(tmp.join("profile.conf"), "name=demo\ntab_bar=aw\n");
+    temp::write(&tabs, "app\nserver\n");
+    temp::write(&plugin, "wasm\n");
+
+    let output = std::process::Command::new(support::command::aw())
+        .env("AW_TAB_BAR_PLUGIN_PATH", &plugin)
+        .arg("zellij-render-layout")
+        .arg(&tabs)
+        .arg("/workspace")
+        .output()
+        .expect("render aw tab bar layout");
+    assert_success("render aw tab bar layout", &output);
+
+    let rendered = stdout(&output);
+    assert!(rendered.contains(&format!("plugin location=\"file:{}\"", plugin.display())));
+    assert!(rendered.contains("workspace \"front\""));
+    assert!(!rendered.contains("zellij:tab-bar"));
+}
