@@ -138,13 +138,13 @@ When `config/aw/profile.conf` exists, `aw` auto-detects the project profile.
 Manage saved and live tabs with the `tab` namespace:
 
 ```bash
-aw tab list front
-aw tab add front keyboard
-aw tab add front keyboard@1
-aw tab move front keyboard@1
-aw tab rename front keyboard keys
-aw tab remove front keyboard
-aw tab refresh front
+aw front tab list
+aw front tab add keyboard
+aw front tab add keyboard@1
+aw front tab move keyboard@1
+aw front tab rename keyboard keys
+aw front tab remove keyboard
+aw front tab refresh
 ```
 
 `aw refresh <workspace>` converges a live session back to its `*.tabs` file:

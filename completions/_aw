@@ -160,9 +160,25 @@ _aw() {
       [[ "$CURRENT" -eq 3 ]] && compadd -- $(zellij list-sessions -n 2>/dev/null | awk '{ print $1 }')
       ;;
     *)
-      if [[ "$CURRENT" -eq 2 ]]; then
+      if [[ "${words[3]:-}" == "tab" ]]; then
+        case "${words[4]:-}" in
+          "")
+            [[ "$CURRENT" -eq 4 ]] && compadd -- "${tab_commands[@]}"
+            ;;
+          list|refresh)
+            ;;
+          add|move|remove)
+            [[ "$CURRENT" -eq 5 ]] && _aw_tabs "${words[2]}"
+            ;;
+          rename)
+            [[ "$CURRENT" -eq 5 ]] && _aw_tabs "${words[2]}"
+            ;;
+        esac
+      elif [[ "$CURRENT" -eq 2 ]]; then
         compadd -- "${commands[@]}"
         _aw_workspaces
+      elif [[ "$CURRENT" -eq 3 ]]; then
+        compadd -- tab -s --session -r --root
       elif [[ "$CURRENT" -gt 2 ]]; then
         compadd -- -s --session -r --root
       fi

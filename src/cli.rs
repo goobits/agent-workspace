@@ -43,12 +43,12 @@ workspaces:
   aw <workspace>=<tab>,...          create, add, replace, and sync a workspace
 
 tabs:
-  aw tab list <workspace>
-  aw tab add <workspace> <tab[@index]>
-  aw tab move <workspace> <tab@index>
-  aw tab rename <workspace> <old-tab> <new-tab>
-  aw tab remove <workspace> <tab>
-  aw tab refresh <workspace>
+  aw <workspace> tab list
+  aw <workspace> tab add <tab[@index]>
+  aw <workspace> tab move <tab@index>
+  aw <workspace> tab rename <old-tab> <new-tab>
+  aw <workspace> tab remove <tab>
+  aw <workspace> tab refresh
 
 sessions:
   aw ps
@@ -169,6 +169,8 @@ pub fn run(args: Vec<String>) -> Result<i32> {
                     ));
                 }
                 upsert_local_workspace(other)
+            } else if args.get(1).is_some_and(|arg| arg == "tab") {
+                run_workspace_first_tab_command(other, &args[2..])
             } else {
                 run_launch(other, &args[1..])
             }
@@ -439,6 +441,50 @@ fn run_tab_command(args: &[String]) -> Result<i32> {
             run_workspace_tab_command(workspace, action, &args[2..])
         }
         other => Err(AwError::usage(format!("aw: unknown tab action {}", other))),
+    }
+}
+
+fn run_workspace_first_tab_command(workspace: &str, args: &[String]) -> Result<i32> {
+    let action = args.first().map(String::as_str).unwrap_or("");
+    if action.is_empty() {
+        return Err(AwError::usage(format!(
+            "aw: {} tab requires an action",
+            workspace
+        )));
+    }
+
+    match action {
+        "list" | "refresh" => {
+            if args.len() != 1 {
+                return Err(AwError::usage(format!(
+                    "aw: {} tab {} does not accept extra arguments",
+                    workspace, action
+                )));
+            }
+            run_workspace_tab_command(workspace, action, &[])
+        }
+        "add" | "move" | "remove" => {
+            if args.len() != 2 {
+                return Err(AwError::usage(format!(
+                    "aw: {} tab {} requires exactly one tab",
+                    workspace, action
+                )));
+            }
+            run_workspace_tab_command(workspace, action, &args[1..])
+        }
+        "rename" => {
+            if args.len() != 3 {
+                return Err(AwError::usage(format!(
+                    "aw: {} tab rename requires old and new tab names",
+                    workspace
+                )));
+            }
+            run_workspace_tab_command(workspace, action, &args[1..])
+        }
+        other => Err(AwError::usage(format!(
+            "aw: unknown {} tab action {}",
+            workspace, other
+        ))),
     }
 }
 

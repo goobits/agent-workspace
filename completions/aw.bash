@@ -146,8 +146,28 @@ _aw_completion() {
       fi
       ;;
     *)
-      if [[ "$COMP_CWORD" -eq 1 ]]; then
+      if [[ "${COMP_WORDS[2]:-}" == "tab" ]]; then
+        case "${COMP_WORDS[3]:-}" in
+          "")
+            [[ "$COMP_CWORD" -eq 3 ]] && COMPREPLY=( $(compgen -W "list add move rename remove refresh" -- "$cur") )
+            ;;
+          list|refresh)
+            ;;
+          add|move|remove)
+            if [[ "$COMP_CWORD" -eq 4 ]]; then
+              COMPREPLY=( $(compgen -W "$(_aw_tabs "${COMP_WORDS[1]}")" -- "$cur") )
+            fi
+            ;;
+          rename)
+            if [[ "$COMP_CWORD" -eq 4 ]]; then
+              COMPREPLY=( $(compgen -W "$(_aw_tabs "${COMP_WORDS[1]}")" -- "$cur") )
+            fi
+            ;;
+        esac
+      elif [[ "$COMP_CWORD" -eq 1 ]]; then
         COMPREPLY=( $(compgen -W "help install setup doctor paths repo list create refresh rename remove tab commit owner ps kill $(_aw_workspaces)" -- "$cur") )
+      elif [[ "$COMP_CWORD" -eq 2 ]]; then
+        COMPREPLY=( $(compgen -W "tab -s --session -r --root" -- "$cur") )
       elif [[ "$COMP_CWORD" -gt 1 ]]; then
         COMPREPLY=( $(compgen -W "-s --session -r --root" -- "$cur") )
       fi

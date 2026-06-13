@@ -184,7 +184,7 @@ fn tab_rename_preserves_live_tab_instead_of_recreating_it() {
 
     let output = home
         .aw_command()
-        .args(["tab", "rename", "front", "keyboard", "keys"])
+        .args(["front", "tab", "rename", "keyboard", "keys"])
         .current_dir(&project)
         .env("FAKE_ZELLIJ_TABS", &tabs)
         .env(
@@ -437,7 +437,7 @@ fn doctor_refresh_tab_edit_scratch_and_session_commands_use_aw_surface() {
     );
     let output = home
         .aw_command()
-        .args(["tab", "list", "front"])
+        .args(["front", "tab", "list"])
         .current_dir(&project)
         .env("FAKE_ZELLIJ_TABS", &tabs)
         .output()
@@ -450,22 +450,22 @@ fn doctor_refresh_tab_edit_scratch_and_session_commands_use_aw_surface() {
 
     for (args, expected_tabs, order_file) in [
         (
-            vec!["tab", "add", "front", "search@1"],
+            vec!["front", "tab", "add", "search@1"],
             "tools\nsearch\ncomponents\nkeyboard\nskills\nscratch\n",
             "front-add-order.txt",
         ),
         (
-            vec!["tab", "move", "front", "keyboard@1"],
+            vec!["front", "tab", "move", "keyboard@1"],
             "tools\nkeyboard\nsearch\ncomponents\nskills\nscratch\n",
             "front-move-order.txt",
         ),
         (
-            vec!["tab", "rename", "front", "keyboard", "keys"],
+            vec!["front", "tab", "rename", "keyboard", "keys"],
             "tools\nkeys\nsearch\ncomponents\nskills\nscratch\n",
             "front-rename-order.txt",
         ),
         (
-            vec!["tab", "remove", "front", "keys"],
+            vec!["front", "tab", "remove", "keys"],
             "tools\nsearch\ncomponents\nskills\nscratch\n",
             "front-remove-order.txt",
         ),
