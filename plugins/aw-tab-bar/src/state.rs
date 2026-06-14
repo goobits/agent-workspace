@@ -174,12 +174,12 @@ impl TabBarState {
         // release column. Works whether the drag arrived as Hold/Release motion
         // events or as a plain press-then-release on another tab.
         let origin = self.drag_origin.take()?;
-        self.span_at(col)?; // ignore releases that aren't over a tab
-        let target = self.target_index_for_col(col);
-        if target == origin.index {
-            return None; // released on its own slot: a click, not a move
+        let release_span = self.span_at(col).cloned()?;
+        if release_span.tab_id == origin.tab_id {
+            return None; // released on its own tab: a click, not a move
         }
         self.pending_click = None; // a drag, not a (double-)click
+        let target = self.target_index_for_col(col);
         Some(TabBarCommand::Move {
             name: origin.name,
             index: target,
