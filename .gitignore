@@ -24,6 +24,9 @@
 *.profraw
 *.profdata
 
+# Local agent metadata
+.llm/
+
 # Editor and OS files
 .DS_Store
 Thumbs.db
