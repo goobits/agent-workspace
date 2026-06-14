@@ -198,7 +198,10 @@ pub fn run(args: Vec<String>) -> Result<i32> {
 
 fn run_owner_command(args: &[String]) -> Result<i32> {
     let Some((command, rest)) = args.split_first() else {
-        return Err(scoped_usage("aw: owner requires git or pkg", "aw owner <git|pkg> ..."));
+        return Err(scoped_usage(
+            "aw: owner requires git or pkg",
+            "aw owner <git|pkg> ...",
+        ));
     };
     match command.as_str() {
         "git" => git_queue::run(rest),

@@ -31,6 +31,7 @@ impl Default for Config {
 struct PluginState {
     config: Config,
     tabs: TabBarState,
+    intercepting: bool,
 }
 
 register_plugin!(PluginState);
@@ -39,12 +40,17 @@ impl ZellijPlugin for PluginState {
     fn load(&mut self, configuration: BTreeMap<String, String>) {
         self.config = Config::from(configuration);
         self.tabs.set_status(STATUS_WAITING_FOR_PERMISSIONS);
-        set_selectable(true);
+        // Stay non-selectable so the bar never takes keyboard focus from the
+        // shell panes. Mouse events still route here by position; key input is
+        // grabbed only while a rename is active (see sync_key_intercept).
+        set_selectable(false);
         subscribe(&[EventType::PermissionRequestResult]);
         request_permission(&[
             PermissionType::ReadApplicationState,
             PermissionType::ChangeApplicationState,
             PermissionType::RunCommands,
+            // Needed for intercept_key_presses() during in-bar tab rename.
+            PermissionType::InterceptInput,
         ]);
     }
 
@@ -56,6 +62,8 @@ impl ZellijPlugin for PluginState {
                     EventType::TabUpdate,
                     EventType::Mouse,
                     EventType::Key,
+                    // Keys grabbed during a rename arrive as InterceptedKeyPress, not Key.
+                    EventType::InterceptedKeyPress,
                     EventType::Timer,
                     EventType::RunCommandResult,
                 ]);
@@ -81,6 +89,7 @@ impl ZellijPlugin for PluginState {
                 if self.tabs.rename().is_none() {
                     set_timeout(self.config.double_click_seconds);
                 }
+                self.sync_key_intercept();
                 true
             }
             Event::Mouse(Mouse::Hold(_, col)) => {
@@ -100,10 +109,11 @@ impl ZellijPlugin for PluginState {
                 }
                 false
             }
-            Event::Key(key) => {
+            Event::Key(key) | Event::InterceptedKeyPress(key) => {
                 if let Some(command) = self.tabs.key(KeyInput::from(key)) {
                     self.run_tab_command(command);
                 }
+                self.sync_key_intercept();
                 true
             }
             Event::RunCommandResult(exit_code, _, stderr, context) => {
@@ -124,11 +134,43 @@ impl ZellijPlugin for PluginState {
     }
 
     fn render(&mut self, _rows: usize, cols: usize) {
-        print!("{}", self.tabs.render_line(cols));
+        // Render tabs as theme-styled ribbons (built-in tab-bar look): the
+        // active tab is highlighted via .selected(); a tab being renamed is
+        // tinted. Widths stay literal so click spans line up (see state::render).
+        let tabs = self.tabs.render(cols);
+        let mut line = String::new();
+        for tab in &tabs {
+            let mut text = Text::new(&tab.label);
+            if tab.active {
+                text = text.selected();
+            }
+            if tab.renaming {
+                text = text.color_range(2, ..);
+            }
+            line.push_str(&serialize_text(&text));
+        }
+        if let Some(status) = self.tabs.status() {
+            line.push_str(&serialize_text(&Text::new(status)));
+        }
+        print!("{}", line);
     }
 }
 
 impl PluginState {
+    /// Grab key presses only while a rename is in progress, then release them
+    /// back to the focused pane. This lets the non-selectable bar capture typed
+    /// tab names without ever stealing focus from the shell.
+    fn sync_key_intercept(&mut self) {
+        let renaming = self.tabs.rename().is_some();
+        if renaming && !self.intercepting {
+            intercept_key_presses();
+            self.intercepting = true;
+        } else if !renaming && self.intercepting {
+            clear_key_presses_intercepts();
+            self.intercepting = false;
+        }
+    }
+
     fn run_tab_command(&mut self, command: TabBarCommand) {
         match command {
             TabBarCommand::Focus { index } => switch_tab_to((index + 1) as u32),

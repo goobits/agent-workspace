@@ -497,7 +497,7 @@ fn grant_aw_tab_bar_permissions(plugin_path: &Path) -> Result<()> {
             next.push('\n');
         }
         next.push_str(&format!(
-            "{} {{\n    ReadApplicationState\n    ChangeApplicationState\n    RunCommands\n}}\n",
+            "{} {{\n    ReadApplicationState\n    ChangeApplicationState\n    RunCommands\n    InterceptInput\n}}\n",
             kdl_identifier(grant_name)
         ));
     }

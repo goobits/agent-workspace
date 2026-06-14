@@ -37,6 +37,7 @@ pub enum KeyInput {
 struct PendingClick {
     tab_id: usize,
     index: usize,
+    name: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -51,11 +52,23 @@ pub struct RenameState {
     pub input: String,
 }
 
+/// One tab to draw on the bar. Styling (theme colors, active highlight) is
+/// applied by the caller; `label` is the literal visible text.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RenderTab {
+    pub label: String,
+    pub active: bool,
+    pub renaming: bool,
+}
+
 #[derive(Debug, Default)]
 pub struct TabBarState {
     tabs: Vec<TabItem>,
     spans: Vec<TabSpan>,
     pending_click: Option<PendingClick>,
+    // Tab under the most recent press; survives the double-click timer so a
+    // press-then-release on a different tab reorders even without motion events.
+    drag_origin: Option<PendingClick>,
     drag: Option<DragState>,
     rename: Option<RenameState>,
     status: Option<String>,
@@ -84,48 +97,54 @@ impl TabBarState {
         self.status = None;
     }
 
-    pub fn render_line(&mut self, cols: usize) -> String {
-        self.spans.clear();
-        if cols == 0 {
-            return String::new();
-        }
+    pub fn status(&self) -> Option<&str> {
+        self.status.as_deref()
+    }
 
-        let mut line = String::new();
+    /// Lay out the tabs that fit within `cols`, recording click spans. Each
+    /// label is the literal visible text; the caller styles the active tab.
+    pub fn render(&mut self, cols: usize) -> Vec<RenderTab> {
+        self.spans.clear();
+        let mut out = Vec::new();
+        let mut vis = 0usize;
         for (index, tab) in self.tabs.iter().enumerate() {
-            if !line.is_empty() {
-                push_fitting(&mut line, " ", cols);
-            }
-            let start = line.chars().count();
-            let label = self.tab_label(tab);
-            push_fitting(&mut line, &label, cols);
-            let end = line.chars().count();
-            if end > start {
-                self.spans.push(TabSpan {
-                    tab_id: tab.id,
-                    name: tab.name.clone(),
-                    index,
-                    start,
-                    end,
-                });
-            }
-            if line.chars().count() >= cols {
+            let label = self.tab_visible_label(tab);
+            let width = label.chars().count();
+            if vis + width > cols {
                 break;
             }
+            let start = vis;
+            vis += width;
+            let renaming = self
+                .rename
+                .as_ref()
+                .is_some_and(|rename| rename.old_name == tab.name);
+            self.spans.push(TabSpan {
+                tab_id: tab.id,
+                name: tab.name.clone(),
+                index,
+                start,
+                end: vis,
+            });
+            out.push(RenderTab {
+                label,
+                active: tab.active,
+                renaming,
+            });
         }
-
-        if let Some(status) = &self.status {
-            if !line.is_empty() {
-                push_fitting(&mut line, " ", cols);
-            }
-            push_fitting(&mut line, status, cols);
-        }
-        line
+        out
     }
 
     pub fn click(&mut self, col: usize) {
         let Some(span) = self.span_at(col).cloned() else {
+            self.drag_origin = None;
             return;
         };
+        self.drag_origin = Some(PendingClick {
+            tab_id: span.tab_id,
+            index: span.index,
+            name: span.name.clone(),
+        });
         if self
             .pending_click
             .as_ref()
@@ -138,6 +157,7 @@ impl TabBarState {
         self.pending_click = Some(PendingClick {
             tab_id: span.tab_id,
             index: span.index,
+            name: span.name,
         });
     }
 
@@ -159,13 +179,29 @@ impl TabBarState {
     }
 
     pub fn release(&mut self, col: usize) -> Option<TabBarCommand> {
-        let drag = self.drag.take()?;
-        let target = self.target_index_for_col(col);
-        if target == drag.index {
-            return None;
+        // Hold-based drag (used when the terminal delivers motion events).
+        if let Some(drag) = self.drag.take() {
+            self.drag_origin = None;
+            let target = self.target_index_for_col(col);
+            if target == drag.index {
+                return None;
+            }
+            return Some(TabBarCommand::Move {
+                name: drag.name,
+                index: target,
+            });
         }
+        // Position-based drag: press and release on different tabs => reorder.
+        // Works with basic mouse tracking, where no Hold/motion events arrive.
+        let origin = self.drag_origin.take()?;
+        let span = self.span_at(col).cloned()?;
+        if span.tab_id == origin.tab_id {
+            return None; // same tab: leave it to the click / double-click path
+        }
+        self.pending_click = None; // a drag, not a (double-)click
+        let target = self.target_index_for_col(col);
         Some(TabBarCommand::Move {
-            name: drag.name,
+            name: origin.name,
             index: target,
         })
     }
@@ -202,17 +238,16 @@ impl TabBarState {
         }
     }
 
-    fn tab_label(&self, tab: &TabItem) -> String {
+    fn tab_visible_label(&self, tab: &TabItem) -> String {
         if let Some(rename) = &self.rename {
             if rename.old_name == tab.name {
-                return format!("[{}|]", rename.input);
+                return format!(" {}| ", rename.input);
             }
         }
 
-        let marker = if tab.active { "*" } else { " " };
         let sync = if tab.sync_panes { "~" } else { "" };
         let bell = if tab.has_bell { "!" } else { "" };
-        format!("[{}{}{}{}]", marker, tab.name, sync, bell)
+        format!(" {}{}{} ", tab.name, sync, bell)
     }
 
     fn begin_rename(&mut self, index: usize) {
@@ -244,15 +279,6 @@ impl TabBarState {
     }
 }
 
-fn push_fitting(line: &mut String, value: &str, cols: usize) {
-    for ch in value.chars() {
-        if line.chars().count() >= cols {
-            break;
-        }
-        line.push(ch);
-    }
-}
-
 pub fn is_valid_tab_name(value: &str) -> bool {
     !value.is_empty() && value.chars().all(is_valid_tab_name_char)
 }
@@ -281,16 +307,9 @@ mod tests {
         let mut state = TabBarState::default();
         state.set_status("aw-tab-bar: loading tabs");
 
-        assert_eq!(state.render_line(80), "aw-tab-bar: loading tabs");
+        assert!(state.render(80).is_empty());
+        assert_eq!(state.status(), Some("aw-tab-bar: loading tabs"));
         assert!(state.spans().is_empty());
-    }
-
-    #[test]
-    fn status_truncates_to_available_columns() {
-        let mut state = TabBarState::default();
-        state.set_status("aw-tab-bar: loading tabs");
-
-        assert_eq!(state.render_line(10), "aw-tab-bar");
     }
 
     #[test]
@@ -298,7 +317,11 @@ mod tests {
         let mut state = TabBarState::default();
         state.replace_tabs(vec![item(2, 1, "server"), item(1, 0, "app")]);
 
-        assert_eq!(state.render_line(80), "[ app] [ server]");
+        let tabs = state.render(80);
+        assert_eq!(
+            tabs.iter().map(|t| t.label.as_str()).collect::<Vec<_>>(),
+            vec![" app ", " server "]
+        );
         assert_eq!(
             state.spans(),
             &[
@@ -307,14 +330,14 @@ mod tests {
                     name: "app".to_string(),
                     index: 0,
                     start: 0,
-                    end: 6,
+                    end: 5,
                 },
                 TabSpan {
                     tab_id: 2,
                     name: "server".to_string(),
                     index: 1,
-                    start: 7,
-                    end: 16,
+                    start: 5,
+                    end: 13,
                 },
             ]
         );
@@ -324,7 +347,7 @@ mod tests {
     fn click_timeout_focuses_single_clicked_tab() {
         let mut state = TabBarState::default();
         state.replace_tabs(vec![item(1, 0, "app"), item(2, 1, "server")]);
-        state.render_line(80);
+        state.render(80);
 
         state.click(9);
         assert_eq!(
@@ -337,7 +360,7 @@ mod tests {
     fn second_click_on_same_tab_starts_rename() {
         let mut state = TabBarState::default();
         state.replace_tabs(vec![item(1, 0, "app")]);
-        state.render_line(80);
+        state.render(80);
 
         state.click(2);
         state.click(3);
@@ -360,7 +383,7 @@ mod tests {
             item(2, 1, "server"),
             item(3, 2, "git"),
         ]);
-        state.render_line(80);
+        state.render(80);
 
         state.hold(2);
 
@@ -374,10 +397,44 @@ mod tests {
     }
 
     #[test]
+    fn press_then_release_on_other_tab_reorders() {
+        let mut state = TabBarState::default();
+        state.replace_tabs(vec![
+            item(1, 0, "app"),
+            item(2, 1, "server"),
+            item(3, 2, "git"),
+        ]);
+        state.render(80);
+
+        state.click(2); // press on "app"; no Hold/motion events delivered
+        assert_eq!(
+            state.release(15), // release over "git" (span [13,18))
+            Some(TabBarCommand::Move {
+                name: "app".to_string(),
+                index: 2,
+            })
+        );
+    }
+
+    #[test]
+    fn press_and_release_same_tab_is_not_a_reorder() {
+        let mut state = TabBarState::default();
+        state.replace_tabs(vec![item(1, 0, "app"), item(2, 1, "server")]);
+        state.render(80);
+
+        state.click(2); // press on "app"
+        assert_eq!(state.release(3), None); // release still on "app"
+        assert_eq!(
+            state.click_timeout(),
+            Some(TabBarCommand::Focus { index: 0 })
+        );
+    }
+
+    #[test]
     fn rename_accepts_safe_names_only() {
         let mut state = TabBarState::default();
         state.replace_tabs(vec![item(1, 0, "app")]);
-        state.render_line(80);
+        state.render(80);
         state.click(2);
         state.click(2);
         state.key(KeyInput::Backspace);

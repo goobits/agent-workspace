@@ -121,13 +121,13 @@ Common workspace commands:
 ```bash
 aw                         # show help
 aw list                    # list workspaces
-aw front                   # open workspace in a checkout-scoped session
-aw front -s sketch-api     # open or resume an explicit named session
-aw front -r /tmp/worktree  # open with a different cwd in the checkout's default session
+aw main                    # open workspace in a checkout-scoped session
+aw main -s shared-dev      # open or resume an explicit named session
+aw main -r /tmp/worktree   # open with a different cwd in the checkout's default session
 aw create docs guide api scratch
-aw refresh front
-aw rename front app-ui
-aw remove app-ui
+aw refresh main
+aw rename main work
+aw remove work
 ```
 
 When `config/aw/profile.conf` exists, `aw` auto-detects the project profile.
@@ -137,14 +137,14 @@ When `config/aw/profile.conf` exists, `aw` auto-detects the project profile.
 Manage saved and live tabs with the `tab` namespace:
 
 ```bash
-aw front tab list
-aw front tab add keyboard
-aw front tab add keyboard@1
-aw front tab move keyboard@1
-aw front tab rename keyboard keys
-aw front tab remove keyboard
-aw front tab refresh
-aw front tab refresh --session sketch-api
+aw main tab list
+aw main tab add keyboard
+aw main tab add keyboard@1
+aw main tab move keyboard@1
+aw main tab rename keyboard keys
+aw main tab remove keyboard
+aw main tab refresh
+aw main tab refresh --session shared-dev
 ```
 
 When a profile has exactly one workspace, `aw tab` can infer it:
@@ -161,7 +161,7 @@ aw tab refresh
 Power-user shortcut:
 
 ```bash
-aw front=tools,ui,scratch  # create or replace workspace tabs
+aw main=tools,ui,scratch  # create or replace workspace tabs
 ```
 
 `aw refresh <workspace>` converges a live session back to its `*.tabs` file:
@@ -172,7 +172,7 @@ Session commands:
 
 ```bash
 aw session name
-aw session name front
+aw session name main
 aw ps
 aw kill <session>
 ```
@@ -249,9 +249,9 @@ scoped work; a commit-owner tab performs Git and package mutations.
 Set up the owner tab:
 
 ```bash
-aw commit setup front --tab git --agent codex
-aw commit setup front --session sketch-api --tab git --agent codex
-aw commit setup front --tab git --no-agent
+aw commit setup main --tab git --agent codex
+aw commit setup main --session shared-dev --tab git --agent codex
+aw commit setup main --tab git --no-agent
 ```
 
 The setup command prepares the tab and can start the agent, but it does not
@@ -274,7 +274,7 @@ aw commit status
 aw commit doctor
 aw commit wait <request-id>
 aw commit poke git
-aw commit poke git --workspace front
+aw commit poke git --workspace main
 ```
 
 After `--poke git`, the `git` tab should run `$x-commit next`, inspect the
@@ -343,7 +343,7 @@ Profiles are inert project files:
 config/aw/
   profile.conf
   main.tabs
-  frontend.tabs
+  docs.tabs
   routes.conf
 ```
 
@@ -353,7 +353,7 @@ config/aw/
 name=my-project
 root=/workspace
 default_workspace=main
-default_workspaces=main frontend
+default_workspaces=main docs
 ```
 
 Set `tab_bar=aw` to use the optional AW tab bar plugin when its WASM artifact
@@ -385,8 +385,7 @@ git
 scratch
 ```
 
-Workspace names are just file names. `aw frontend` opens
-`config/aw/frontend.tabs`.
+Workspace names are just file names. `aw docs` opens `config/aw/docs.tabs`.
 
 Default session names include the profile name, workspace name, and a stable
 fingerprint of the local checkout that owns `config/aw`, so the same workspace
@@ -425,8 +424,8 @@ Inside Zellij, the watcher marks background activity:
 Watcher controls:
 
 ```bash
-ZELLIJ_AGENT_TAB_WATCHER_DISABLE=1 aw front
-ZELLIJ_AGENT_TAB_WATCHER_POLL_SECONDS=0.5 aw front
+ZELLIJ_AGENT_TAB_WATCHER_DISABLE=1 aw main
+ZELLIJ_AGENT_TAB_WATCHER_POLL_SECONDS=0.5 aw main
 ZELLIJ_SESSION_NAME=<resolved-session> ~/.aw/bin/.zellij-agent-tab-watcher --status
 ZELLIJ_SESSION_NAME=<resolved-session> ~/.aw/bin/.zellij-agent-tab-watcher --restart
 ZELLIJ_SESSION_NAME=<resolved-session> ~/.aw/bin/.zellij-agent-tab-watcher --stop
@@ -438,7 +437,7 @@ Session behavior:
 - Existing sessions with the same resolved session name are resumed instead of
   recreated.
 - Default session names are checkout-scoped. Old sessions named only after a
-  workspace, such as `front` or `main`, can remain until you remove them with
+  workspace, such as `main` or `docs`, can remain until you remove them with
   `aw kill <session>`.
 - Running `aw` inside Zellij switches sessions in place.
 - Serialized sessions restore panes as shells so `Ctrl+C` exits foreground
