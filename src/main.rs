@@ -45,7 +45,7 @@ fn main() {
                 eprintln!("{}", error.message);
             }
             if error.show_usage {
-                eprintln!("{}", help::format(cli::USAGE.trim_end()));
+                eprint!("{}", help::format_block(cli::USAGE.trim_end()));
             }
             std::process::exit(error.code);
         }

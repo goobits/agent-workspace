@@ -10,9 +10,9 @@ fn aw() -> Command {
 fn help_prints_public_cli_header_on_stdout() {
     let output = aw().arg("help").output().expect("run aw help");
     assert!(output.status.success());
-    assert!(
-        String::from_utf8_lossy(&output.stdout).starts_with("aw: Zero-friction Zellij workspaces")
-    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.starts_with("\n🧭 aw: Zero-friction Zellij workspaces"));
+    assert!(stdout.ends_with("\n\n"));
     assert!(output.stderr.is_empty());
 }
 
@@ -25,6 +25,8 @@ fn help_supports_forced_dracula_color() {
         .expect("run aw help with color");
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.starts_with('\n'));
+    assert!(stdout.ends_with("\n\n"));
     assert!(stdout.contains("\u{1b}[38;2;189;147;249m"));
     assert!(stdout.contains("\u{1b}[38;2;255;121;198mworkspaces:"));
     assert!(stdout.contains("aw tab rename <old-tab> <new-tab[@index]>"));
@@ -51,6 +53,8 @@ fn namespace_help_is_scoped() {
         .expect("run aw commit --help");
     assert!(commit.status.success());
     let commit_stdout = String::from_utf8_lossy(&commit.stdout);
+    assert!(commit_stdout.starts_with('\n'));
+    assert!(commit_stdout.ends_with("\n\n"));
     assert!(commit_stdout.contains("aw commit request <title> <path>..."));
     assert!(!commit_stdout.contains("workspaces:"));
 
@@ -60,6 +64,8 @@ fn namespace_help_is_scoped() {
         .expect("run aw repo --help");
     assert!(repo.status.success());
     let repo_stdout = String::from_utf8_lossy(&repo.stdout);
+    assert!(repo_stdout.starts_with('\n'));
+    assert!(repo_stdout.ends_with("\n\n"));
     assert!(repo_stdout.contains("aw repo routes [doctor]"));
     assert!(repo_stdout.contains("aw repo worktree <path>"));
     assert!(!repo_stdout.contains("commit queue:"));

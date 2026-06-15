@@ -10,11 +10,15 @@ const PINK: &str = "\x1b[38;2;255;121;198m";
 const PURPLE: &str = "\x1b[38;2;189;147;249m";
 
 pub(crate) fn print(text: &str) {
-    print!("{}", format(text));
+    print!("{}", format_block(text));
 }
 
 pub(crate) fn println(text: &str) {
-    println!("{}", format(text));
+    print!("{}", format_block(text));
+}
+
+pub(crate) fn format_block(text: &str) -> String {
+    format!("\n{}\n\n", format(text.trim_end_matches('\n')))
 }
 
 pub(crate) fn format(text: &str) -> String {
